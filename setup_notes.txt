@@ -1,0 +1,42 @@
+# Create virtual environment
+python3 -m venv env
+
+# Activate new environment
+source env/bin/activate
+which python3
+
+
+
+# list installed python dependencies/packages
+pip freeze > requirements.txt
+
+# Install python dependencies
+pip install -r requirements.txt
+
+
+
+# Git pre-commit hook to prevent committing large files
+pip install pre-commit
+pre-commit install
+pre-commit run check-added-large-files --all-files # manual test
+
+
+
+# count how many CVE subdirectories contain "text" dir
+find data_out -type d -name "CVE-*" -exec test -d "{}/text" \; -print | wc -l
+
+# count how many CVE subdirectories contain refined/refined.md
+find ./data_out -path "./data_out/CVE*/refined/refined.md" -type f | wc -l
+
+# list big files
+find ./data_out -type f -size +10M
+
+
+# Find all links.txt files in CVE directories and search for YouTube links
+find ./data_out/CVE-* -name "links.txt" -type f -exec sh -c 'if grep -l "youtube" "$1" >/dev/null; then dirname "$1"; fi' sh {} \;
+
+# count CVE dirs (these are created at the start of processing)
+find ./data_out -type d -name "CVE-*" | wc -l
+
+# count text dirs (these are created during the first phase for each CVE)
+find ./data_out -type d -path "./data_out/CVE-*/text" | wc -l
