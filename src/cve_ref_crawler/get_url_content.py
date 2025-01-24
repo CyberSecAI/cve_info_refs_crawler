@@ -420,13 +420,12 @@ class ContentCrawler:
         """Process a single URL: fetch, save raw content, and convert"""
         self.logger.info(f"Started processing URL: {url} for {cve_id}")
         
-        # Check if URL should be skipped
         if self.tracker.should_skip_url(url, cve_id):
             self.logger.info(f"Skipping previously failed URL: {url}")
             return False
         
+        raw_filepath = None
         try:
-            # Skip if URL should be ignored
             if self.should_ignore_url(url):
                 self.domain_stats.add_url(url, ignored=True)
                 self.logger.info(f"Skipping ignored URL: {url}")
@@ -437,6 +436,13 @@ class ContentCrawler:
             result = self._fetch_url(url)
             if not result:
                 self.tracker.add_failed_url(url, cve_id, "Failed to fetch content")
+                self.domain_stats.add_url(url, success=False)
+                return False
+
+            # Check binary file size limit
+            if isinstance(result['content'], bytes) and len(result['content']) > 1024 * 1024:  # 1MB
+                self.logger.warning(f"Binary content exceeds 1MB limit: {url}")
+                self.tracker.add_failed_url(url, cve_id, "Binary content too large")
                 self.domain_stats.add_url(url, success=False)
                 return False
 
@@ -459,6 +465,7 @@ class ContentCrawler:
             converted_content, conversion_method = self._convert_content(raw_filepath)
             if not converted_content:
                 self.logger.error(f"Failed to convert content from {url}")
+                self._cleanup_failed_files(raw_filepath)
                 self.domain_stats.add_url(url, success=False)
                 return False
                 
@@ -467,41 +474,48 @@ class ContentCrawler:
             text_filepath = self._save_converted_content(converted_content, url, cve_id)
             success = text_filepath is not None
             
-            # Record final result
-            self.domain_stats.add_url(url, success=success)
-            
-            if success:
-                self.logger.info(f"Successfully processed {url}")
-            else:
+            if not success:
+                self._cleanup_failed_files(raw_filepath)
                 self.tracker.add_failed_url(url, cve_id, "Failed to save converted content")
                 self.logger.error(f"Failed to save converted content from {url}")
             
+            # Record final result
+            self.domain_stats.add_url(url, success=success)
             return success
             
         except requests.exceptions.RequestException as e:
             error_msg = f"Request failed: {str(e)}"
             self.logger.error(f"Request error for URL {url}: {error_msg}")
+            if raw_filepath:
+                self._cleanup_failed_files(raw_filepath)
             self.domain_stats.add_url(url, success=False)
             self.tracker.add_failed_url(url, cve_id, error_msg)
             return False
         except TimeoutError:
             error_msg = "Request timed out"
             self.logger.error(f"Timeout processing URL {url}")
-            self.domain_stats.add_url(url, success=False)
-            self.tracker.add_failed_url(url, cve_id, error_msg)
-            return False
-        except FileNotFoundError as e:
-            error_msg = f"File operation failed: {str(e)}"
-            self.logger.error(f"File error for URL {url}: {error_msg}")
+            if raw_filepath:
+                self._cleanup_failed_files(raw_filepath)
             self.domain_stats.add_url(url, success=False)
             self.tracker.add_failed_url(url, cve_id, error_msg)
             return False
         except Exception as e:
             error_msg = f"Unexpected error: {str(e)}"
             self.logger.error(f"Error processing URL {url}: {error_msg}", exc_info=True)
+            if raw_filepath:
+                self._cleanup_failed_files(raw_filepath)
             self.domain_stats.add_url(url, success=False)
             self.tracker.add_failed_url(url, cve_id, error_msg)
             return False
+
+    def _cleanup_failed_files(self, filepath: Path) -> None:
+        """Delete files that failed to process successfully"""
+        try:
+            if filepath and filepath.exists():
+                filepath.unlink()
+                self.logger.info(f"Cleaned up failed file: {filepath}")
+        except Exception as e:
+            self.logger.error(f"Error cleaning up file {filepath}: {str(e)}")
 
     def process_cve_urls(self, cve_id: str) -> None:
         """Process URLs for a given CVE"""

@@ -10,6 +10,7 @@ import hashlib
 from urllib.parse import urlparse
 from .utils.logging_utils import setup_logging
 from config import LOG_CONFIG
+from threading import Lock
 
 @dataclass
 class URLStatus:
@@ -21,11 +22,11 @@ class URLStatus:
 
 class ProcessingTracker:
     def __init__(self, output_dir: Path):
-        """Initialize the processing tracker"""
         self.output_dir = output_dir
         self.failed_urls_file = output_dir / "failed_urls.csv"
         self.cve_status_file = output_dir / "cve_status.json"
         self.failed_urls: Dict[str, URLStatus] = {}
+        self._lock = Lock()
         self.logger = setup_logging(
             log_dir=LOG_CONFIG["dir"],
             log_level=LOG_CONFIG["level"],
@@ -33,6 +34,45 @@ class ProcessingTracker:
         )
         self._load_failed_urls()
         
+
+
+    def should_skip_url(self, url: str, cve_id: str) -> bool:
+        """Check if URL should be skipped based on previous failures"""
+        key = f"{cve_id}:{url}"
+        return key in self.failed_urls
+
+    def add_failed_url(self, url: str, cve_id: str, reason: str) -> None:
+        """Record a failed URL attempt"""
+        with self._lock:
+            key = f"{cve_id}:{url}"
+            status = URLStatus(
+                url=url,
+                cve_id=cve_id,
+                status='failed',
+                reason=reason
+            )
+            self.failed_urls[key] = status
+            self._append_failed_url(status)
+        self.logger.info(f"Added failed URL for {cve_id}: {url} - {reason}")
+
+    def _append_failed_url(self, status: URLStatus) -> None:
+        """Append single failed URL to CSV file"""
+        try:
+            write_header = not self.failed_urls_file.exists()
+            with open(self.failed_urls_file, 'a', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                if write_header:
+                    writer.writerow(['CVE_ID', 'URL', 'Status', 'Failure_Reason', 'Timestamp'])
+                writer.writerow([
+                    status.cve_id,
+                    status.url,
+                    status.status,
+                    status.reason,
+                    status.timestamp
+                ])
+        except Exception as e:
+            self.logger.error(f"Error appending failed URL: {e}")
+
     def _load_failed_urls(self) -> None:
         """Load previously failed URLs from CSV"""
         if self.failed_urls_file.exists():
@@ -50,41 +90,26 @@ class ProcessingTracker:
                         )
                 self.logger.info(f"Loaded {len(self.failed_urls)} failed URLs from {self.failed_urls_file}")
             except Exception as e:
-                self.logger.error(f"Error loading failed URLs: {e}")
-
-    def should_skip_url(self, url: str, cve_id: str) -> bool:
-        """Check if URL should be skipped based on previous failures"""
-        key = f"{cve_id}:{url}"
-        return key in self.failed_urls
-
-    def add_failed_url(self, url: str, cve_id: str, reason: str) -> None:
-        """Record a failed URL attempt"""
-        key = f"{cve_id}:{url}"
-        self.failed_urls[key] = URLStatus(
-            url=url,
-            cve_id=cve_id,
-            status='failed',
-            reason=reason
-        )
-        self._save_failed_urls()
-        self.logger.info(f"Added failed URL for {cve_id}: {url} - {reason}")
-
+                self.logger.error(f"Error loading failed URLs: {e}")            
+                
     def _save_failed_urls(self) -> None:
         """Save failed URLs to CSV file"""
         try:
-            with open(self.failed_urls_file, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-                writer.writerow(['CVE_ID', 'URL', 'Status', 'Failure_Reason', 'Timestamp'])
-                
-                for status in self.failed_urls.values():
-                    writer.writerow([
-                        status.cve_id,
-                        status.url,
-                        status.status,
-                        status.reason,
-                        status.timestamp
-                    ])
-            self.logger.debug(f"Saved {len(self.failed_urls)} failed URLs to {self.failed_urls_file}")
+            with self._lock:
+                with open(self.failed_urls_file, 'w', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(['CVE_ID', 'URL', 'Status', 'Failure_Reason', 'Timestamp'])
+                    
+                    failed_urls_snapshot = list(self.failed_urls.values())
+                    for status in failed_urls_snapshot:
+                        writer.writerow([
+                            status.cve_id,
+                            status.url,
+                            status.status,
+                            status.reason,
+                            status.timestamp
+                        ])
+                self.logger.debug(f"Saved {len(self.failed_urls)} failed URLs")
         except Exception as e:
             self.logger.error(f"Error saving failed URLs: {e}")
 
