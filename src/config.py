@@ -28,7 +28,7 @@ elif CISA_YT:
 elif TOP_25:
     TARGET_CVES_CSV = EXTERNAL_CWE_TOP25_DIR / "data_in" / "top25-mitre-mapping-analysis-2023-public.csv"
 else:
-    TARGET_CVES_CSV = "data_in/cves_2000.csv"
+    TARGET_CVES_CSV = "data_in/cves.csv"
     
 NVD_JSONL_FILE = DATA_IN_DIR / "nvd.jsonl"
 DEAD_DOMAINS_CSV = DATA_IN_DIR / "dead_domains.csv"  

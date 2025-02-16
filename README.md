@@ -403,6 +403,41 @@ python src/main.py
 ## Refined CVE Reference Link Vulnerability Info
 
 
+### Wrong information in Description but Correct information in references: CVE-2024-4343
+
+https://nvd.nist.gov/vuln/detail/CVE-2024-4343
+
+The Description says it's a **command injection** vulnerability vulnerability, but it isn't.
+
+> A Python **command injection** vulnerability exists in the `SagemakerLLM` class's `complete()` method within `./private_gpt/components/llm/custom/sagemaker.py` of the imartinez/privategpt application, versions up to and including 0.3.0. The vulnerability arises due to the use of the `eval()` function to parse a string received from a remote AWS SageMaker LLM endpoint into a dictionary. This method of parsing is unsafe as it can execute arbitrary Python code contained within the response. An attacker can exploit this vulnerability by manipulating the response from the AWS SageMaker LLM endpoint to include malicious Python code, leading to potential execution of arbitrary commands on the system hosting the application. The issue is fixed in version 0.6.0.
+ 
+There's no mention of **command injection** in the summary of the CVE references content: 
+https://github.com/CyberSecAI/cve_info_refs/blob/main/2024/4xxx/CVE-2024-4343/refined/refined.md
+
+
+### Extra useful info in the references: CVE-2021-3567
+
+
+https://nvd.nist.gov/vuln/detail/CVE-2021-3567
+
+Description
+> A flaw was found in Caribou due to a regression of CVE-2020-25712 fix. An attacker could use this flaw to bypass screen-locking applications that leverage Caribou as an input mechanism. The highest threat from this vulnerability is to system availability.
+
+https://github.com/CyberSecAI/cve_info_refs/blob/main/2021/3xxx/CVE-2021-3567/refined/refined.md
+
+Extract
+
+````
+2. Root Cause of Vulnerability:
+
+The root cause is a regression introduced by a fix for CVE-2020-25712 in Xorg. The Xorg patch changed the behavior of the X keyboard handling in such a way that Caribou's keyboard input handling (specifically involving the "ē" character, which is accessed via a long press on "e") resulted in a crash due to an incompatibility in how XkbChangeMap was being used. The issue is in the xadapter.vala file, where XkbKeyTypesMask and related fields were used, which caused a BadLength error in combination with the new Xorg behavior.
+
+3. Weaknesses/Vulnerabilities Present:
+
+Crash Vulnerability: Caribou was susceptible to crashing when specific input sequences were provided using the on-screen keyboard.
+Screen Lock Bypass: By crashing Caribou, which was used as the input mechanism for some screen-locking applications (like the Cinnamon screensaver), an attacker could bypass the lock screen and gain access to the user's session.
+````
+
 ### Interpretation of Code in Links
 
 https://nvd.nist.gov/vuln/detail/CVE-2024-56622

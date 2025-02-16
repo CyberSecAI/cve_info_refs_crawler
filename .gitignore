@@ -1,5 +1,6 @@
 env
 data_in/nvd.jsonl
+data_in/_nvd.jsonl
 tmp
 test
 logs
